@@ -2,6 +2,7 @@
 import mysql from 'mysql2/promise';
 import { Patient, User, PatientNote, Appointment, Vital, Medication, Procedure, Clinic, Plan } from '@/types/ehr';
 import bcrypt from 'bcryptjs';
+import { use } from 'react';
 
 const dbConfig = {
     host: process.env.DATABASE_HOST,
@@ -14,7 +15,7 @@ const dbConfig = {
 };
 
 const pool = mysql.createPool(dbConfig);
-
+const { v4: uuidv4 } = await import('uuid');
 // Utility to get a connection
 const getConnection = () => pool.getConnection();
 
@@ -47,17 +48,24 @@ export const db = {
             if (existingUser) {
                 throw new Error('Username already exists');
             }
-            const hashedPassword = await bcrypt.hash(userData.password!, 10);
-            const newUser: Omit<User, 'id' | 'password'> & { password_hash: string } = {
+            const plain = userData.password;
+const hash = await bcrypt.hash(plain, 10);
+const match = await bcrypt.compare(plain, hash);
+console.log('Should be true:', match);
+            const userId = uuidv4();
+            const hashedPassword = await bcrypt.hash(userData.password, 10);
+            console.log('Hash before insert:', hashedPassword);
+            const newUser: Omit<User, 'password'> & { password: string } = {
+                id: userId,
                 username: userData.username,
-                password_hash: hashedPassword,
+                password: hashedPassword,
                 plan: userData.plan,
                 clinicName: userData.clinicName,
             };
 
             const [result] = await connection.execute(
-                'INSERT INTO users (username, password_hash, plan, clinicName) VALUES (?, ?, ?, ?)',
-                [newUser.username, newUser.password_hash, newUser.plan, newUser.clinicName]
+                'INSERT INTO users (id,username, password, plan, clinic_name) VALUES (?,?, ?, ?, ?)',
+                [newUser.id,newUser.username, newUser.password, newUser.plan, newUser.clinicName]
             );
             const insertResult = result as mysql.ResultSetHeader;
             const insertedId = String(insertResult.insertId);

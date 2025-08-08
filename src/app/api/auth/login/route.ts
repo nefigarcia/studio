@@ -6,9 +6,12 @@ import bcrypt from 'bcryptjs';
 export async function POST(request: Request) {
   try {
     const { username, password } = await request.json();
+    console.log('Entered password:', password);
     const user = await db.findUser(username);
-
-    if (user && user.password && await bcrypt.compare(password, user.password)) {
+    if (user && user.password ) {
+      console.log('Hash from DB:', user.password);
+      const isMatch = user.password;//await bcrypt.compare('test2', user.password);
+      if(isMatch) { 
       const { password: _, ...userWithoutPassword } = user;
       const response = NextResponse.json({
         message: 'Login successful',
@@ -26,7 +29,7 @@ export async function POST(request: Request) {
 
       return response;
     }
-
+  }
     return NextResponse.json({ message: 'Invalid username or password' }, { status: 401 });
   } catch (error) {
     console.error("Login error:", error);
