@@ -115,8 +115,8 @@ export function EHRApp() {
                                 )}
                              </div>
                         </div>
-                         <PlanGate allowedPlans={['Admin']}>
-                            <div className="flex gap-2">
+                         <div className="flex gap-2">
+                             <PlanGate allowedPlans={['Admin']}>
                                  <AddClinicDialog
                                     open={isAddClinicDialogOpen}
                                     onOpenChange={setIsAddClinicDialogOpen}
@@ -127,18 +127,18 @@ export function EHRApp() {
                                         Agregar Clínica
                                     </Button>
                                 </AddClinicDialog>
-                                <AddPatientDialog
-                                    open={isAddPatientDialogOpen}
-                                    onOpenChange={setIsAddPatientDialogOpen}
-                                    onSave={handleAddPatient}
-                                >
-                                    <Button size="sm" variant="outline" className="w-full md:w-auto">
-                                        <Plus className="h-4 w-4 mr-2" />
-                                        Agregar Paciente
-                                    </Button>
-                                </AddPatientDialog>
-                            </div>
-                        </PlanGate>
+                            </PlanGate>
+                            <AddPatientDialog
+                                open={isAddPatientDialogOpen}
+                                onOpenChange={setIsAddPatientDialogOpen}
+                                onSave={handleAddPatient}
+                            >
+                                <Button size="sm" variant="outline" className="w-full md:w-auto">
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Agregar Paciente
+                                </Button>
+                            </AddPatientDialog>
+                        </div>
                     </div>
                     
                     <div>

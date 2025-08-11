@@ -24,7 +24,7 @@ export default function SignupPage() {
   const [clinicName, setClinicName] = useState('');
   const [hospitalName, setHospitalName] = useState('');
 
-  const { signup } = useAuth();
+  const { signup, login } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -43,11 +43,13 @@ export default function SignupPage() {
     try {
       const clinicNameToSubmit = selectedPlan === 'Hospital' ? hospitalName : clinicName;
       await signup(username, password, selectedPlan, clinicNameToSubmit);
+      // Automatically log the user in after successful signup
+      await login(username, password);
       toast({
         title: "¡Cuenta Creada!",
-        description: `Tu cuenta ha sido creada exitosamente. Ahora puedes iniciar sesión.`,
+        description: `Bienvenido a NotasMed. Tu cuenta ha sido creada exitosamente.`,
       });
-      router.push('/login');
+      router.push('/dashboard');
     } catch (error) {
         const e = error as Error;
       toast({
