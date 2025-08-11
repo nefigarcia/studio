@@ -118,11 +118,12 @@ console.log('Should be true:', match);
     },
     addPatient: async (patientData: Omit<Patient, 'id'>): Promise<Patient> => {
         const connection = await getConnection();
+        const patientId = uuidv4();
         try {
             const { name, demographics } = patientData;
             const [result] = await connection.execute(
-                'INSERT INTO patients (name, dob, gender, address, phone, email) VALUES (?, ?, ?, ?, ?, ?)',
-                [name, demographics.dob, demographics.gender, demographics.address, demographics.phone, demographics.email]
+                'INSERT INTO patients (id,name, dob, gender, address, phone, email) VALUES (?,?, ?, ?, ?, ?, ?)',
+                [patientId, name, demographics.dob, demographics.gender, demographics.address, demographics.phone, demographics.email]
             );
             const insertResult = result as mysql.ResultSetHeader;
             const newId = String(insertResult.insertId);
