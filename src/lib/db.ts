@@ -1,8 +1,8 @@
 
 import mysql from 'mysql2/promise';
-import { Patient, User, PatientNote, Appointment, Vital, Medication, Procedure, Clinic, Plan } from '@/types/ehr';
+import { Patient, User, PatientNote, Appointment, Vital, Medication, Procedure, Clinic, Plan, Demographics } from '@/types/ehr';
 import bcrypt from 'bcryptjs';
-import { use } from 'react';
+//import { v4 as uuidv4 } from 'uuid';
 
 const dbConfig = {
     host: process.env.DATABASE_HOST,
@@ -18,6 +18,13 @@ const pool = mysql.createPool(dbConfig);
 const { v4: uuidv4 } = await import('uuid');
 // Utility to get a connection
 const getConnection = () => pool.getConnection();
+
+
+// This function will format the date to YYYY-MM-DD
+const formatDate = (date: Date): string => {
+    return date.toISOString().split('T')[0];
+}
+
 
 // This object will now contain methods that interact with the MySQL database
 export const db = {
@@ -48,29 +55,23 @@ export const db = {
             if (existingUser) {
                 throw new Error('Username already exists');
             }
-            const plain = userData.password;
-const hash = await bcrypt.hash(plain, 10);
-const match = await bcrypt.compare(plain, hash);
-console.log('Should be true:', match);
-            const userId = uuidv4();
-            const hashedPassword = await bcrypt.hash(userData.password, 10);
-            console.log('Hash before insert:', hashedPassword);
-            const newUser: Omit<User, 'password'> & { password: string } = {
-                id: userId,
+            const hashedPassword = await bcrypt.hash(userData.password!, 10);
+            const newUserId = uuidv4();
+            const newUser: User = {
+                id: newUserId,
                 username: userData.username,
                 password: hashedPassword,
                 plan: userData.plan,
                 clinicName: userData.clinicName,
             };
 
-            const [result] = await connection.execute(
-                'INSERT INTO users (id,username, password, plan, clinic_name) VALUES (?,?, ?, ?, ?)',
-                [newUser.id,newUser.username, newUser.password, newUser.plan, newUser.clinicName]
+            await connection.execute(
+                'INSERT INTO users (id, username, password, plan, clinic_name) VALUES (?, ?, ?, ?, ?)',
+                [newUser.id, newUser.username, newUser.password, newUser.plan, newUser.clinicName]
             );
-            const insertResult = result as mysql.ResultSetHeader;
-            const insertedId = String(insertResult.insertId);
 
-            return { id: insertedId, ...userData };
+            const { password, ...userWithoutPassword } = newUser;
+            return userWithoutPassword;
         } finally {
             connection.release();
         }
@@ -80,10 +81,25 @@ console.log('Should be true:', match);
         const connection = await getConnection();
         try {
             const [rows] = await connection.execute('SELECT * FROM patients');
-            const patients = rows as Patient[];
-            // In a real app, you'd fetch related data (vitals, notes, etc.) here
-            // For now, returning patients with empty arrays for simplicity
-            return patients.map(p => ({ ...p, vitals: [], medications: [], appointments: [], procedures: [], notes: [] }));
+            const patients = (rows as any[]).map(p => {
+                const { dob, ...rest } = p;
+                return {
+                    ...rest,
+                    demographics: {
+                        dob: formatDate(new Date(dob)),
+                        gender: p.gender,
+                        address: p.address,
+                        phone: p.phone,
+                        email: p.email,
+                    },
+                    vitals: [], 
+                    medications: [], 
+                    appointments: [], 
+                    procedures: [], 
+                    notes: []
+                }
+            })
+            return patients;
         } finally {
             connection.release();
         }
@@ -92,10 +108,31 @@ console.log('Should be true:', match);
         const connection = await getConnection();
         try {
             const [patientRows] = await connection.execute('SELECT * FROM patients WHERE id = ?', [id]);
-            const patients = patientRows as Patient[];
+            const patients = patientRows as any[];
             if (patients.length === 0) return null;
 
-            const patient = patients[0];
+            const patientData = patients[0];
+
+            const { dob, gender, address, phone, email, ...patientInfo } = patientData;
+            
+            const demographics: Demographics = {
+                dob: formatDate(new Date(dob)),
+                gender,
+                address,
+                phone,
+                email
+            };
+
+            const patient: Patient = {
+                ...patientInfo,
+                demographics,
+                vitals: [],
+                medications: [],
+                appointments: [],
+                procedures: [],
+                notes: []
+            };
+
             // Fetch related data
             const [vitals] = await connection.execute('SELECT * FROM vitals WHERE patient_id = ?', [id]);
             const [medications] = await connection.execute('SELECT * FROM medications WHERE patient_id = ?', [id]);
@@ -103,14 +140,13 @@ console.log('Should be true:', match);
             const [procedures] = await connection.execute('SELECT * FROM procedures WHERE patient_id = ?', [id]);
             const [notes] = await connection.execute('SELECT * FROM patient_notes WHERE patient_id = ?', [id]);
             
-            return {
-                ...patient,
-                vitals: vitals as Vital[],
-                medications: medications as Medication[],
-                appointments: appointments as Appointment[],
-                procedures: procedures as Procedure[],
-                notes: notes as PatientNote[]
-            };
+            patient.vitals = vitals as Vital[];
+            patient.medications = medications as Medication[];
+            patient.appointments = appointments as Appointment[];
+            patient.procedures = procedures as Procedure[];
+            patient.notes = notes as PatientNote[];
+
+            return patient;
 
         } finally {
             connection.release();
@@ -121,12 +157,11 @@ console.log('Should be true:', match);
         const patientId = uuidv4();
         try {
             const { name, demographics } = patientData;
-            const [result] = await connection.execute(
-                'INSERT INTO patients (id,name, dob, gender, address, phone, email) VALUES (?,?, ?, ?, ?, ?, ?)',
-                [patientId, name, demographics.dob, demographics.gender, demographics.address, demographics.phone, demographics.email]
+            const newId = uuidv4();
+            await connection.execute(
+                'INSERT INTO patients (id, name, dob, gender, address, phone, email) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [newId, name, demographics.dob, demographics.gender, demographics.address, demographics.phone, demographics.email]
             );
-            const insertResult = result as mysql.ResultSetHeader;
-            const newId = String(insertResult.insertId);
             return { ...patientData, id: newId };
         } finally {
             connection.release();
@@ -160,12 +195,11 @@ console.log('Should be true:', match);
              if (await db.findClinicByName(name)) {
                 throw new Error('Clinic with that name already exists');
             }
-            const [result] = await connection.execute(
-                'INSERT INTO clinics (name, address, phone) VALUES (?, ?, ?)',
-                [name, address, phone]
+            const newId = uuidv4();
+            await connection.execute(
+                'INSERT INTO clinics (id, name, address, phone) VALUES (?, ?, ?, ?)',
+                [newId, name, address, phone]
             );
-            const insertResult = result as mysql.ResultSetHeader;
-            const newId = String(insertResult.insertId);
             return { ...clinicData, id: newId };
         } finally {
             connection.release();
